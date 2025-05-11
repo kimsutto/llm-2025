@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+faiss-cpu==1.7.4          
+sentence-transformers     
+numpy==1.26.4             
+scikit-learn
+tqdm
+rich
+pydantic
+requests
+unstructured
+python-docx
+pdfplumber
+pymupdf
+tiktoken
