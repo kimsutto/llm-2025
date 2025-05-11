@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LLM Chat</title>
+  </head>
+  <body>
+    <h2>LLM Chat</h2>
+    <div>
+      <textarea id="question" rows="4" style="width: 100%"></textarea>
+      <button onclick="ask()">Ask</button>
+    </div>
+    <pre id="response"></pre>
+
+    <script>
+      const vscode = acquireVsCodeApi();
+
+      function ask() {
+        const q = document.getElementById("question").value;
+        vscode.postMessage({ type: "ask", question: q });
+      }
+
+      window.addEventListener("message", (event) => {
+        const msg = event.data;
+        if (msg.type === "answer") {
+          document.getElementById("response").innerText = JSON.stringify(
+            msg.data,
+            null,
+            2
+          );
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -24,3 +24,8 @@ data/
 *.json
 *.index
 *.pkl
+
+# ▶️ Node.js 모듈 폴더
+node_modules/
+dist/
+
