@@ -105,3 +105,17 @@ llm-2025/
 ```
 python scripts/chunk_and_embed.py
 ```
+
+### FAISS 인덱스에 추가
+
+```
+python scripts/build_faiss.py
+```
+
+### 서버 실행
+
+```
+uvicorn api.main:app --reload
+```
+
+→ 기본 포트 http://127.0.0.1:8000
