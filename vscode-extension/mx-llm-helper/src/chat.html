@@ -133,12 +133,8 @@
             text: message,
           });
 
-          // Mock response
-          const response =
-            mockResponses[message.toLowerCase()] || mockResponses.default;
-          setTimeout(() => {
-            addMessage(response);
-          }, 500);
+          // 로딩 메시지 표시
+          addMessage("검색 중...", false);
         }
       }
 

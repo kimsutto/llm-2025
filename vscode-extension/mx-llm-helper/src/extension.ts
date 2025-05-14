@@ -3,14 +3,15 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { ApiService } from "./api";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
   console.log("Extension activation started...");
 
-  // 가장 기본적인 메시지 표시
-  vscode.window.showInformationMessage("Extension activated!");
+  // API 서비스 초기화
+  const apiService = new ApiService("http://localhost:3000"); // API 서버 URL을 적절히 수정하세요
 
   // 웹뷰 패널 생성
   let chatPanel: vscode.WebviewPanel | undefined;
@@ -57,20 +58,46 @@ export function activate(context: vscode.ExtensionContext) {
 
       // 웹뷰로부터 메시지 수신
       chatPanel.webview.onDidReceiveMessage(
-        (message) => {
+        async (message) => {
           console.log("Received message from webview:", message);
           switch (message.type) {
             case "sendMessage":
               console.log("Processing message:", message.text);
-              // 여기에 실제 API 호출 로직을 추가할 수 있습니다
+              try {
+                // API 호출
+                const response = await apiService.search(message.text);
+                console.log("API response:", response);
 
-              // 웹뷰로 응답 전송
-              if (chatPanel) {
-                chatPanel.webview.postMessage({
-                  type: "addMessage",
-                  text: `Received your message: ${message.text}`,
-                  isUser: false,
-                });
+                // 웹뷰로 응답 전송
+                if (chatPanel) {
+                  if (response.status === "ok") {
+                    // 결과를 문자열로 변환
+                    const resultsText = response.results
+                      .map((result) => JSON.stringify(result, null, 2))
+                      .join("\n\n");
+
+                    chatPanel.webview.postMessage({
+                      type: "addMessage",
+                      text: `검색 결과:\n\`\`\`\n${resultsText}\n\`\`\``,
+                      isUser: false,
+                    });
+                  } else {
+                    chatPanel.webview.postMessage({
+                      type: "addMessage",
+                      text: "죄송합니다. 검색 중 오류가 발생했습니다.",
+                      isUser: false,
+                    });
+                  }
+                }
+              } catch (error) {
+                console.error("Error processing message:", error);
+                if (chatPanel) {
+                  chatPanel.webview.postMessage({
+                    type: "addMessage",
+                    text: "죄송합니다. 요청을 처리하는 중 오류가 발생했습니다.",
+                    isUser: false,
+                  });
+                }
               }
               break;
           }
