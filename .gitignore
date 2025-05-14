@@ -19,13 +19,9 @@ __pycache__/
 # ▶️ Jupyter 관련
 .ipynb_checkpoints/
 
-# ▶️ 프로젝트 산출물
-data/
-*.json
-*.index
-*.pkl
+# ▶️ 분석 대상 레포
+repo/vue-ts-realworld-app
 
 # ▶️ Node.js 모듈 폴더
 node_modules/
 dist/
-
