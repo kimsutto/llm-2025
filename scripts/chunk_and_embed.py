@@ -55,8 +55,9 @@ def generate_embedding_json(repo_path, output_path):
         json.dump(result, f, ensure_ascii=False, indent=2)
 
 
+# TODO repo path, output_path 수정
 if __name__ == "__main__":
     generate_embedding_json(
-    repo_path="/Users/seonghuiyu/Documents/GitHub/blog-client",
-    output_path="/Users/seonghuiyu/Documents/GitHub/llm-2025/data/embeddings.json"
+    repo_path="/Users/a453069/Documents/GitHub/canva-clone",
+    output_path="/Users/a453069/Documents/GitHub/llm-2025/data/embeddings.json"
 )

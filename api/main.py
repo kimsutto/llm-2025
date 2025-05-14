@@ -28,6 +28,7 @@ class QueryRequest(BaseModel):
 @app.post("/search")
 async def search(req: QueryRequest):
     # 1. 임베딩 생성
+    ## TODO LLM 모델로 바꿔야함
     query_embedding = model.encode(req.question)
     query_embedding = np.array([query_embedding], dtype="float32")
 
@@ -35,6 +36,7 @@ async def search(req: QueryRequest):
     distances, indices = index.search(query_embedding, req.top_k)
 
     # 3. 결과 구성
+    # TODO 결과 최적화 (LLM 모델로 바꿔야함)
     results = []
     for idx, dist in zip(indices[0], distances[0]):
         item = metadata[idx]
@@ -43,5 +45,9 @@ async def search(req: QueryRequest):
             "text": item["text"],
             "score": float(dist)
         })
-
-    return {"results": results}
+    # 4. 결과 반환 (일단 이렇게)
+    return {
+        "question": req.question,
+        "status": 'ok', #에러 처리
+        "results": results
+    }
