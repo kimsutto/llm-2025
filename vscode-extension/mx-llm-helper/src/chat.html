@@ -127,6 +127,12 @@
           addMessage(message, true);
           messageInput.value = "";
 
+          // 확장 프로그램으로 메시지 전송
+          vscode.postMessage({
+            type: "sendMessage",
+            text: message,
+          });
+
           // Mock response
           const response =
             mockResponses[message.toLowerCase()] || mockResponses.default;
