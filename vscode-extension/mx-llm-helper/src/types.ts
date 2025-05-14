@@ -6,4 +6,11 @@ export interface SearchResponse {
 
 export interface SearchRequest {
   question: string;
+  selectedText?: string; // 선택된 텍스트
+  currentFile?: {
+    // 현재 파일 정보
+    content: string;
+    path: string;
+    language: string;
+  };
 }

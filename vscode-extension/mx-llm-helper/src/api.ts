@@ -7,23 +7,42 @@ export class ApiService {
     this.baseUrl = baseUrl;
   }
 
-  async search(question: string): Promise<SearchResponse> {
+  async search(
+    question: string,
+    selectedText?: string,
+    currentFile?: SearchRequest["currentFile"]
+  ): Promise<SearchResponse> {
     // Mock 응답 데이터
     const mockResults = [
       {
         title: "검색 결과 1",
         content: "이것은 첫 번째 검색 결과입니다.",
         score: 0.95,
+        context: selectedText
+          ? "선택된 코드 기반 검색"
+          : currentFile
+          ? "전체 파일 기반 검색"
+          : "일반 검색",
       },
       {
         title: "검색 결과 2",
         content: "이것은 두 번째 검색 결과입니다.",
         score: 0.85,
+        context: selectedText
+          ? "선택된 코드 기반 검색"
+          : currentFile
+          ? "전체 파일 기반 검색"
+          : "일반 검색",
       },
       {
         title: "검색 결과 3",
         content: "이것은 세 번째 검색 결과입니다.",
         score: 0.75,
+        context: selectedText
+          ? "선택된 코드 기반 검색"
+          : currentFile
+          ? "전체 파일 기반 검색"
+          : "일반 검색",
       },
     ];
 
@@ -42,7 +61,11 @@ export class ApiService {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question } as SearchRequest),
+        body: JSON.stringify({
+          question,
+          selectedText,
+          currentFile
+        } as SearchRequest),
       });
 
       if (!response.ok) {

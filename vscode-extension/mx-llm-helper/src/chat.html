@@ -1,43 +1,73 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Chat</title>
     <style>
       body {
-        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
         margin: 0;
-        background: var(--vscode-editor-background);
+        padding: 20px;
+        background-color: var(--vscode-editor-background);
         color: var(--vscode-editor-foreground);
-        font-family: var(--vscode-font-family);
-      }
-      .chat-container {
+        height: 100vh;
         display: flex;
         flex-direction: column;
-        height: 100vh;
       }
-      .messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 10px;
-      }
-      .message {
+      .search-mode {
         margin-bottom: 10px;
         padding: 8px;
-        border-radius: 6px;
+        border-radius: 4px;
+        background-color: var(--vscode-badge-background);
+        color: var(--vscode-badge-foreground);
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .search-mode.selected {
+        background-color: var(--vscode-gitDecoration-addedResourceForeground);
+      }
+      .search-mode.file {
+        background-color: var(
+          --vscode-gitDecoration-modifiedResourceForeground
+        );
+      }
+      .search-mode.general {
+        background-color: var(
+          --vscode-gitDecoration-untrackedResourceForeground
+        );
+      }
+      .search-mode-icon {
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+      }
+      .chat-container {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 4px;
+      }
+      .message {
+        margin-bottom: 15px;
+        padding: 10px;
+        border-radius: 4px;
         max-width: 80%;
       }
-      .user-message {
-        background: var(--vscode-input-background);
+      .message.user {
+        background-color: var(--vscode-badge-background);
         margin-left: auto;
       }
-      .assistant-message {
-        background: var(--vscode-editor-inactiveSelectionBackground);
+      .message.bot {
+        background-color: var(--vscode-editor-inactiveSelectionBackground);
         margin-right: auto;
       }
       .input-container {
-        padding: 10px;
-        border-top: 1px solid var(--vscode-panel-border);
         display: flex;
         gap: 10px;
       }
@@ -45,47 +75,53 @@
         flex: 1;
         padding: 8px;
         border: 1px solid var(--vscode-input-border);
-        background: var(--vscode-input-background);
-        color: var(--vscode-input-foreground);
         border-radius: 4px;
+        background-color: var(--vscode-input-background);
+        color: var(--vscode-input-foreground);
       }
       #sendButton {
         padding: 8px 16px;
-        background: var(--vscode-button-background);
+        background-color: var(--vscode-button-background);
         color: var(--vscode-button-foreground);
         border: none;
         border-radius: 4px;
         cursor: pointer;
       }
       #sendButton:hover {
-        background: var(--vscode-button-hoverBackground);
+        background-color: var(--vscode-button-hoverBackground);
       }
-      .code-block {
-        background: var(--vscode-editor-background);
+      pre {
+        background-color: var(--vscode-editor-background);
         padding: 10px;
         border-radius: 4px;
-        margin: 5px 0;
-        font-family: var(--vscode-editor-font-family);
+        overflow-x: auto;
+      }
+      code {
+        font-family: "Courier New", Courier, monospace;
       }
     </style>
   </head>
   <body>
-    <div class="chat-container">
-      <div class="messages" id="messages"></div>
-      <div class="input-container">
-        <input
-          type="text"
-          id="messageInput"
-          placeholder="Type your message..."
-        />
-        <button id="sendButton">Send</button>
-      </div>
+    <div class="search-mode" id="searchMode">
+      <span class="search-mode-icon">🔍</span>
+      <span id="searchModeText">일반 검색</span>
+    </div>
+    <div class="chat-container" id="chatContainer"></div>
+    <div class="input-container">
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="메시지를 입력하세요..."
+      />
+      <button id="sendButton">전송</button>
     </div>
     <script>
       const vscode = acquireVsCodeApi();
-      const messagesContainer = document.getElementById("messages");
+      const chatContainer = document.getElementById("chatContainer");
       const messageInput = document.getElementById("messageInput");
       const sendButton = document.getElementById("sendButton");
+      const searchMode = document.getElementById("searchMode");
+      const searchModeText = document.getElementById("searchModeText");
 
       // Mock data for testing
       const mockResponses = {
@@ -94,50 +130,57 @@
         default: "I understand your question. Let me help you with that.",
       };
 
-      function addMessage(text, isUser = false) {
-        const messageDiv = document.createElement("div");
-        messageDiv.className = `message ${
-          isUser ? "user-message" : "assistant-message"
-        }`;
-
-        // Check if the message contains code (simple check for now)
-        if (text.includes("```")) {
-          const parts = text.split("```");
-          parts.forEach((part, index) => {
-            if (index % 2 === 0) {
-              messageDiv.appendChild(document.createTextNode(part));
-            } else {
-              const codeBlock = document.createElement("pre");
-              codeBlock.className = "code-block";
-              codeBlock.textContent = part;
-              messageDiv.appendChild(codeBlock);
-            }
-          });
-        } else {
-          messageDiv.textContent = text;
-        }
-
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }
-
+      // 메시지 전송 함수
       function sendMessage() {
-        const message = messageInput.value.trim();
-        if (message) {
-          addMessage(message, true);
-          messageInput.value = "";
+        const text = messageInput.value.trim();
+        if (text) {
+          // 사용자 메시지 추가
+          addMessage(text, true);
 
-          // 확장 프로그램으로 메시지 전송
+          // 메시지 전송
           vscode.postMessage({
             type: "sendMessage",
-            text: message,
+            text: text,
           });
 
-          // 로딩 메시지 표시
-          addMessage("검색 중...", false);
+          // 입력창 초기화
+          messageInput.value = "";
         }
       }
 
+      // 메시지 추가 함수
+      function addMessage(text, isUser) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${isUser ? "user" : "bot"}`;
+
+        // 마크다운 코드 블록 처리
+        const formattedText = text.replace(
+          /```([\s\S]*?)```/g,
+          "<pre><code>$1</code></pre>"
+        );
+        messageDiv.innerHTML = formattedText;
+
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+
+      // 검색 모드 업데이트 함수
+      function updateSearchMode(mode) {
+        searchMode.className = "search-mode " + mode;
+        switch (mode) {
+          case "selected":
+            searchModeText.textContent = "선택된 코드 검색";
+            break;
+          case "file":
+            searchModeText.textContent = "현재 파일 검색";
+            break;
+          case "general":
+            searchModeText.textContent = "일반 검색";
+            break;
+        }
+      }
+
+      // 이벤트 리스너 등록
       sendButton.addEventListener("click", sendMessage);
       messageInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
@@ -145,12 +188,15 @@
         }
       });
 
-      // Handle messages from the extension
+      // VS Code로부터 메시지 수신
       window.addEventListener("message", (event) => {
         const message = event.data;
         switch (message.type) {
           case "addMessage":
             addMessage(message.text, message.isUser);
+            break;
+          case "updateSearchMode":
+            updateSearchMode(message.mode);
             break;
         }
       });

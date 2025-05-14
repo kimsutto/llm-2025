@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { ApiService } from "./api";
+import { SearchRequest } from "./types";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -15,6 +16,57 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 웹뷰 패널 생성
   let chatPanel: vscode.WebviewPanel | undefined;
+
+  // 현재 에디터의 정보를 가져오는 함수
+  function getCurrentEditorInfo(): SearchRequest["currentFile"] | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return undefined;
+    }
+
+    return {
+      content: editor.document.getText(),
+      path: editor.document.fileName,
+      language: editor.document.languageId,
+    };
+  }
+
+  // 선택된 텍스트를 가져오는 함수
+  function getSelectedText(): string | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return undefined;
+    }
+
+    const selection = editor.selection;
+    if (selection.isEmpty) {
+      return undefined;
+    }
+
+    return editor.document.getText(selection);
+  }
+
+  // 검색 모드 업데이트 함수
+  function updateSearchMode() {
+    if (!chatPanel) {
+      return;
+    }
+
+    const selectedText = getSelectedText();
+    const currentFile = getCurrentEditorInfo();
+    let mode: "selected" | "file" | "general" = "general";
+
+    if (selectedText) {
+      mode = "selected";
+    } else if (currentFile) {
+      mode = "file";
+    }
+
+    chatPanel.webview.postMessage({
+      type: "updateSearchMode",
+      mode,
+    });
+  }
 
   // 채팅 열기 명령어 등록
   let openChatCommand = vscode.commands.registerCommand(
@@ -64,8 +116,16 @@ export function activate(context: vscode.ExtensionContext) {
             case "sendMessage":
               console.log("Processing message:", message.text);
               try {
+                // 현재 에디터 정보와 선택된 텍스트 가져오기
+                const selectedText = getSelectedText();
+                const currentFile = getCurrentEditorInfo();
+
                 // API 호출
-                const response = await apiService.search(message.text);
+                const response = await apiService.search(
+                  message.text,
+                  selectedText,
+                  currentFile
+                );
                 console.log("API response:", response);
 
                 // 웹뷰로 응답 전송
@@ -104,6 +164,19 @@ export function activate(context: vscode.ExtensionContext) {
         },
         undefined,
         context.subscriptions
+      );
+
+      // 초기 검색 모드 설정
+      updateSearchMode();
+
+      // 에디터 선택 변경 이벤트 구독
+      context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(() => {
+          updateSearchMode();
+        }),
+        vscode.window.onDidChangeTextEditorSelection(() => {
+          updateSearchMode();
+        })
       );
     }
   );
