@@ -1,53 +1,96 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from fastapi.responses import Response
+
 from pydantic import BaseModel
-import json
 import faiss
+import pickle
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# 모델 & 인덱스 로드
-model = SentenceTransformer("BAAI/bge-m3")
-index = faiss.read_index("../data/faiss.index")
-with open("../data/metadata.json", "r", encoding="utf-8") as f:
-    metadata = json.load(f)
+# ✅ 모델 & 인덱스 & 메타데이터 로드
+# TODO: 모델  로컬, 원격 받게 수정 
+# model = SentenceTransformer("intfloat/multilingual-e5-large-instruct")
+model = SentenceTransformer("../../multilingual-e5-large-instruct")
+index = faiss.read_index("../data/output_faiss/faiss.index")
 
-# FastAPI 객체 생성
+with open("../data/output_faiss/metadata.pkl", "rb") as f:
+    metadata = pickle.load(f)  # ✅ 우리 구조: { file, name, code }
+
+# ✅ FastAPI 객체 생성
 app = FastAPI()
 
-# 요청 body 스키마
+# ✅ 요청 스키마
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
 
-# 검색 요청 처리
-# 사용자 쿼리(question)를 POST로 받음
-# 쿼리를 임베딩으로 변환 (BGE-m3 모델 재사용)
-# FAISS 인덱스에서 top-k 유사한 벡터 검색
-# metadata.json을 통해 결과 ID에 해당하는 텍스트 반환
-
+# ✅ 검색 API
 @app.post("/search")
 async def search(req: QueryRequest):
-    # 1. 임베딩 생성
-    ## TODO LLM 모델로 바꿔야함
-    query_embedding = model.encode(req.question)
-    query_embedding = np.array([query_embedding], dtype="float32")
+    try:
+        # 1. 임베딩 생성 (e5 계열은 query: 접두어 필요)
+        query_prompt = f"query: {req.question.strip()}와 관련된 Vue 2 컴포넌트를 찾고 싶습니다."
+        query_embedding = model.encode([query_prompt], normalize_embeddings=True)
+        query_embedding = np.array(query_embedding, dtype="float32")
 
-    # 2. FAISS 검색
-    distances, indices = index.search(query_embedding, req.top_k)
+        # 2. FAISS 검색
+        distances, indices = index.search(query_embedding, req.top_k)
 
-    # 3. 결과 구성
-    # TODO 결과 최적화 (LLM 모델로 바꿔야함)
-    results = []
-    for idx, dist in zip(indices[0], distances[0]):
-        item = metadata[idx]
-        results.append({
-            "id": item["id"],
-            "text": item["text"],
-            "score": float(dist)
-        })
-    # 4. 결과 반환 (일단 이렇게)
-    return {
-        "question": req.question,
-        "status": 'ok', #에러 처리
-        "results": results
-    }
+        # 3. 결과 구성
+        results = []
+        for idx, dist in zip(indices[0], distances[0]):
+            if idx >= len(metadata):
+                continue
+            item = metadata[idx]
+            results.append({
+                "file": item["file"], #id 
+                "name": item["name"], 
+                "code": item["code"], #text? 
+                "score": float(dist)
+            })
+
+        # 4. Markdown 형식의 응답 문자열 구성
+        md_lines = [f"# 검색 결과: {req.question}\n"]
+        for i, result in enumerate(results, 1):
+            md_lines.append(f"### {i}. 🔹 {result['name']} ({result['file']})")
+            md_lines.append(f"**Score:** {result['score']:.4f}\n")
+            md_lines.append("```ts")
+            md_lines.append(result["code"])
+            md_lines.append("```\n")
+
+        md_result = "\n".join(md_lines)
+
+        # 5. 응답 반환 (Markdown 문자열을 results 필드로)
+        return Response(content=md_result, media_type="text/markdown")
+
+        """
+            아래처럼 json 응답으로 받으실거면 ! 
+            쓰는 쪽에서 마크다운 파싱하면 됩니다욧 
+
+            md_lines = [f"# 검색 결과: {req.question}\n"]
+            for i, result in enumerate(results, 1):
+                md_lines.append(f"### {i}. 🔹 {result['name']} ({result['file']})")
+                md_lines.append(f"**Score:** {result['score']:.4f}\n")
+                md_lines.append("")  # 줄바꿈
+                # ✅ 코드 블록은 들여쓰기 4칸으로 처리
+                code_block = "\n".join(["    " + line for line in result["code"].splitlines()])
+                md_lines.append(code_block)
+                md_lines.append("")  # 줄바꿈
+
+            md_result = "\n".join(md_lines)
+
+            return {
+                "question": req.question,
+                "status": "ok",
+                "results": md_result
+            }
+        """
+
+
+    except Exception as e:
+        # ❗에러 처리
+        return {
+            "question": req.question,
+            "status": "error",
+            "message": str(e)
+        }
