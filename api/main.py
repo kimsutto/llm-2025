@@ -31,6 +31,28 @@ class RAGRequest(BaseModel):
     question: str
     top_k: int = 5
 
+# ✅ LLM 질문 생성 
+def rewrite_query(question: str, embedding_model_name="intfloat/multilingual-e5-large-instruct", vector_db="FAISS") -> str:
+    # 프롬프트: 벡터 모델과 DB 정보를 같이 제공
+    prompt = f"""
+너는 사용자의 질문을 {vector_db} 벡터 검색에 적합한 형식으로 정제하는 역할을 맡고 있어.
+현재 우리가 사용하는 임베딩 모델은 '{embedding_model_name}'이야.
+사용자의 질문은 아래와 같아. 이 질문을 더 명확하고 기술적인 벡터 검색 쿼리로 바꿔줘.
+
+질문: {question}
+
+정제된 쿼리:"""
+
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(device)
+    outputs = generator.generate(
+        inputs["input_ids"],
+        max_new_tokens=64,
+        num_beams=4,
+        early_stopping=True
+    )
+
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
 # ✅ LLM 응답 생성
 def generate_answer_with_codet5(question: str, context_chunks: list[str]) -> str:
     context = "\n\n".join([f"// {i+1}번 코드\n{chunk}" for i, chunk in enumerate(context_chunks)])
@@ -56,8 +78,12 @@ def generate_answer_with_codet5(question: str, context_chunks: list[str]) -> str
 @app.post("/search")
 async def search(req: RAGRequest):
     try:
+        # 0 사용자 질문 정제 
+        refined_question = rewrite_query(req.question)
+
+
         # 1. 임베딩 생성 (e5 계열은 query: 접두어 필요)
-        query_prompt = f"query: {req.question.strip()}와 관련된 Vue 2 컴포넌트를 찾고 싶습니다."
+        query_prompt = f"query: {refined_question}"
         query_embedding = model.encode([query_prompt], normalize_embeddings=True)
         query_embedding = np.array(query_embedding, dtype="float32")
 
