@@ -29,19 +29,17 @@ app = FastAPI()
 # ✅ 요청 스키마
 class RAGRequest(BaseModel):
     question: str
-    top_k: int = 5
+    top_k: int = 2
 
 # ✅ LLM 질문 생성 
 def rewrite_query(question: str, embedding_model_name="intfloat/multilingual-e5-large-instruct", vector_db="FAISS") -> str:
     # 프롬프트: 벡터 모델과 DB 정보를 같이 제공
     prompt = f"""
-너는 사용자의 질문을 {vector_db} 벡터 검색에 적합한 형식으로 정제하는 역할을 맡고 있어.
-현재 우리가 사용하는 임베딩 모델은 '{embedding_model_name}'이야.
-사용자의 질문은 아래와 같아. 이 질문을 더 명확하고 기술적인 벡터 검색 쿼리로 바꿔줘.
+다음 사용자의 질문을 벡터 검색에 적합하게 짧고 명확한 검색 쿼리로 바꿔줘.
 
-질문: {question}
+사용자 질문: {question}
 
-정제된 쿼리:"""
+검색용 쿼리:"""
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(device)
     outputs = generator.generate(
@@ -55,14 +53,14 @@ def rewrite_query(question: str, embedding_model_name="intfloat/multilingual-e5-
 
 # ✅ LLM 응답 생성
 def generate_answer_with_codet5(question: str, context_chunks: list[str]) -> str:
-    context = "\n\n".join([f"// {i+1}번 코드\n{chunk}" for i, chunk in enumerate(context_chunks)])
-    prompt = f"""질문: {question}
+    # ✅ 시스템 역할 고정
+    base_role = f"""너는 Vue 2 + TypeScript + class-component 기반 프로젝트의 AI 코드 비서야.
+아래 코드를 참고해서 '{question}' 에 대해 정확하고 간결하게 답변해줘."""
+    # ✅ 청크 수 제한
+    limited_chunks = context_chunks[:2]  # 너무 많으면 truncate
+    context = "\n\n".join([f"// {i+1}번 코드\n{chunk}" for i, chunk in enumerate(limited_chunks)])
 
-아래는 우리 프로젝트 내부 코드입니다. 이 코드들을 참고해서 질문에 답해주세요:
-
-{context}
-
-답변:"""
+    prompt = f"{base_role}\n\n{context}\n\n답변:"
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(device)
     outputs = generator.generate(
@@ -71,7 +69,11 @@ def generate_answer_with_codet5(question: str, context_chunks: list[str]) -> str
         num_beams=4,
         early_stopping=True
     )
-    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+    result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    clean = ''.join(filter(lambda x: x.isprintable(), result))
+    clean = clean.replace('\ufffd', '').strip()
+
+    return clean
 
 
 # ✅ 검색 API
@@ -80,7 +82,7 @@ async def search(req: RAGRequest):
     try:
         # 0 사용자 질문 정제 
         refined_question = rewrite_query(req.question)
-
+        print(refined_question)
 
         # 1. 임베딩 생성 (e5 계열은 query: 접두어 필요)
         query_prompt = f"query: {refined_question}"
@@ -105,6 +107,7 @@ async def search(req: RAGRequest):
                 "code": entry["code"]
             })
         answer = generate_answer_with_codet5(req.question, chunks)
+        print(answer)
 
 
         # 4. Markdown 형식의 응답 문자열 구성
@@ -121,29 +124,6 @@ async def search(req: RAGRequest):
 
         # 5. 응답 반환 (Markdown 문자열을 results 필드로)
         return Response(content=md_result, media_type="text/markdown")
-
-        """
-            아래처럼 json 응답으로 받으실거면 ! 
-            쓰는 쪽에서 마크다운 파싱하면 됩니다욧 
-
-            md_lines = [f"# 검색 결과: {req.question}\n"]
-            for i, result in enumerate(results, 1):
-                md_lines.append(f"### {i}. 🔹 {result['name']} ({result['file']})")
-                md_lines.append(f"**Score:** {result['score']:.4f}\n")
-                md_lines.append("")  # 줄바꿈
-                # ✅ 코드 블록은 들여쓰기 4칸으로 처리
-                code_block = "\n".join(["    " + line for line in result["code"].splitlines()])
-                md_lines.append(code_block)
-                md_lines.append("")  # 줄바꿈
-
-            md_result = "\n".join(md_lines)
-
-            return {
-                "question": req.question,
-                "status": "ok",
-                "results": md_result
-            }
-        """
 
 
     except Exception as e:
