@@ -15,13 +15,13 @@ import torch
 # TODO: 모델  로컬, 원격 받게 수정 
 # model = SentenceTransformer("intfloat/multilingual-e5-large-instruct")
 model = SentenceTransformer("../../multilingual-e5-large-instruct")
-index = faiss.read_index("../data/output_faiss/faiss.index")
+index = faiss.read_index("../data/output_faiss2/faiss.index")
 tokenizer = AutoTokenizer.from_pretrained("../../codet5-base")
 generator = AutoModelForSeq2SeqLM.from_pretrained("../../codet5-base")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 generator.to(device)
 
-with open("../data/output_faiss/metadata.pkl", "rb") as f:
+with open("../data/output_faiss2/metadata.pkl", "rb") as f:
     metadata = pickle.load(f)  # ✅ 우리 구조: { file, name, code }
 
 # ✅ FastAPI 객체 생성
@@ -82,11 +82,11 @@ def generate_answer_with_codet5(question: str, context_chunks: list[str]) -> str
 async def search(req: RAGRequest):
     try:
         # 0 사용자 질문 정제 
-        refined_question = rewrite_query(req.question)
-        print(refined_question)
+        # refined_question = rewrite_query(req.question)
+        # print(refined_question)
 
         # 1. 임베딩 생성 (e5 계열은 query: 접두어 필요)
-        query_prompt = f"query: {refined_question}"
+        query_prompt = f"query: {req.question}"
         query_embedding = model.encode([query_prompt], normalize_embeddings=True)
         query_embedding = np.array(query_embedding, dtype="float32")
 

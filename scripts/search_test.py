@@ -16,7 +16,7 @@ def search_code(
     metadata,
     top_k: int = 5
 ):
-    query_prompt = f"query: {query.strip()}와 관련된 Vue 2 컴포넌트 또는 메서드를 찾고 싶습니다."
+    query_prompt = f"query: {query.strip()}"
     query_vector = model.encode([query_prompt], normalize_embeddings=True).astype('float32')
     distances, indices = index.search(query_vector, top_k)
 
@@ -34,8 +34,8 @@ def search_code(
 
 def run_search(
     query: str,
-    index_path: str = "../data/output_faiss/faiss.index",
-    metadata_path: str = "../data/output_faiss/metadata.pkl",
+    index_path: str = "../data/output_faiss2/faiss.index",
+    metadata_path: str = "../data/output_faiss2/metadata.pkl",
     model_path: str = "../../multilingual-e5-large-instruct",
     # model_path: str = "intfloat/multilingual-e5-large-instruct",
     top_k: int = 5
