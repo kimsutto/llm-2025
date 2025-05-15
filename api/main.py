@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import Response
+import json
 
 from pydantic import BaseModel
 import faiss
@@ -107,9 +108,25 @@ async def search(req: RAGRequest):
                 "code": entry["code"]
             })
         answer = generate_answer_with_codet5(req.question, chunks)
-        print(answer)
 
 
+        # ✅ 마크다운 포함한 응답 텍스트만 전달 (참고코드 없이)
+        markdown_result = f"## 🤖 LLM 응답\n\n{answer.strip()}"
+
+        return Response(
+            content=json.dumps({
+                "question": req.question,
+                "status": "ok",
+                "result": markdown_result
+            }, ensure_ascii=False),
+            media_type="application/json"
+        )
+
+        # 클라이언트에서 사용 시, document.getElementById("output").innerHTML = marked.parse(md);
+
+
+        """ 
+        마크다운 형식 응답 
         # 4. Markdown 형식의 응답 문자열 구성
         md_lines = [f"# 질문: {req.question}\n", "## 🤖 LLM 응답", answer, "\n## 🔍 참고 코드 (Top {})\n".format(len(references))]
 
@@ -124,6 +141,9 @@ async def search(req: RAGRequest):
 
         # 5. 응답 반환 (Markdown 문자열을 results 필드로)
         return Response(content=md_result, media_type="text/markdown")
+
+        """ 
+
 
 
     except Exception as e:
